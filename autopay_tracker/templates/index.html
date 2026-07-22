@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>AutoPay Tracker — Smart Subscription Manager</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@400;500;700;800;900&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    /* ══════════════════════════════════════════
+       VARIABLES + RESET
+    ══════════════════════════════════════════ */
+    :root {
+      --bg:        #0a0f1e;
+      --surface:   #111827;
+      --card:      #161f30;
+      --card2:     #1c2840;
+      --border:    #1e2d45;
+      --border2:   #243450;
+      --text:      #e2eaf8;
+      --muted:     #64748b;
+      --accent:    #4f8ef7;
+      --accent2:   #7c5cfc;
+      --green:     #10d98c;
+      --yellow:    #f5c518;
+      --red:       #f0454e;
+      --orange:    #f97316;
+      --font-h:    'Cabinet Grotesk', sans-serif;
+      --font-b:    'Instrument Sans', sans-serif;
+      --font-m:    'JetBrains Mono', monospace;
+      --radius:    14px;
+      --shadow:    0 4px 24px rgba(0,0,0,0.4);
+    }
+    [data-theme="light"] {
+      --bg:      #f0f4ff;
+      --surface: #ffffff;
+      --card:    #ffffff;
+      --card2:   #f5f8ff;
+      --border:  #dde4f0;
+      --border2: #ccd5e8;
+      --text:    #0f172a;
+      --muted:   #64748b;
+      --shadow:  0 4px 24px rgba(0,0,0,0.1);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: var(--font-b); font-size: 15px;
+      min-height: 100vh; transition: background 0.3s, color 0.3s;
+    }
+    /* grid texture */
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: radial-gradient(circle at 20% 20%, rgba(79,142,247,0.07) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(124,92,252,0.06) 0%, transparent 50%);
+    }
+
+    /* ══════════════════════════════════════════
+       LAYOUT
+    ══════════════════════════════════════════ */
+    .shell { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 240px; flex-shrink: 0;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 24px 0; position: sticky; top: 0; height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar-logo {
+      padding: 0 20px 28px;
+      font-family: var(--font-h); font-size: 1.25rem; font-weight: 900;
+      letter-spacing: -0.5px;
+    }
+    .sidebar-logo span { color: var(--accent); }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 20px; cursor: pointer; border-radius: 0;
+      font-size: 0.875rem; font-weight: 500; color: var(--muted);
+      transition: all 0.2s; border-left: 3px solid transparent;
+      position: relative;
+    }
+    .nav-item:hover { color: var(--text); background: rgba(79,142,247,0.06); }
+    .nav-item.active {
+      color: var(--accent); background: rgba(79,142,247,0.1);
+      border-left-color: var(--accent);
+    }
+    .nav-icon { font-size: 1.1rem; width: 22px; text-align: center; }
+    .nav-badge {
+      margin-left: auto; background: var(--red);
+      color: #fff; font-size: 0.65rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 99px;
+    }
+    .sidebar-footer {
+      margin-top: auto; padding: 20px;
+    }
+    .theme-toggle {
+      width: 100%; padding: 10px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; cursor: pointer;
+      color: var(--muted); font-family: var(--font-b); font-size: 0.82rem;
+      transition: all 0.2s;
+    }
+    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* MAIN */
+    .main { flex: 1; padding: 32px; overflow-x: hidden; }
+    .page { display: none; animation: fadeUp 0.35s ease; }
+    .page.active { display: block; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .page-title {
+      font-family: var(--font-h); font-size: 1.75rem;
+      font-weight: 800; letter-spacing: -0.5px;
+    }
+    .page-sub { color: var(--muted); font-size: 0.85rem; margin-top: 3px; }
+
+    /* ══════════════════════════════════════════
+       STAT CARDS
+    ══════════════════════════════════════════ */
+    .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px 20px;
+      position: relative; overflow: hidden; transition: transform 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .stat-card.blue::after  { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+    .stat-card.green::after { background: linear-gradient(90deg, var(--green), #0ea5e9); }
+    .stat-card.yellow::after{ background: linear-gradient(90deg, var(--yellow), var(--orange)); }
+    .stat-card.red::after   { background: linear-gradient(90deg, var(--red), var(--orange)); }
+
+    .stat-icon { font-size: 1.6rem; margin-bottom: 10px; }
+    .stat-value {
+      font-family: var(--font-h); font-size: 2rem; font-weight: 900;
+      letter-spacing: -1px; line-height: 1; margin-bottom: 4px;
+    }
+    .stat-label { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+
+    /* ══════════════════════════════════════════
+       REMINDER BANNER
+    ══════════════════════════════════════════ */
+    .reminders-wrap { margin-bottom: 24px; }
+    .reminder-banner {
+      display: flex; align-items: center; gap: 14px;
+      background: rgba(245,197,24,0.08); border: 1px solid rgba(245,197,24,0.3);
+      border-radius: 12px; padding: 14px 18px; margin-bottom: 10px;
+      animation: blink-border 2.5s infinite;
+    }
+    @keyframes blink-border {
+      0%,100% { border-color: rgba(245,197,24,0.3); }
+      50%      { border-color: rgba(245,197,24,0.7); }
+    }
+    .reminder-bell { font-size: 1.4rem; }
+    .reminder-text { font-size: 0.88rem; line-height: 1.5; }
+    .reminder-text strong { color: var(--yellow); }
+    .reminder-days {
+      margin-left: auto; flex-shrink: 0;
+      background: rgba(245,197,24,0.15); color: var(--yellow);
+      font-family: var(--font-m); font-size: 0.75rem; font-weight: 500;
+      padding: 4px 12px; border-radius: 99px;
+    }
+
+    /* ══════════════════════════════════════════
+       GRID: SUBSCRIPTION CARDS + PIE
+    ══════════════════════════════════════════ */
+    .dashboard-grid {
+      display: grid; grid-template-columns: 1fr 320px; gap: 20px;
+    }
+    .section-title {
+      font-family: var(--font-h); font-size: 1.05rem; font-weight: 700;
+      margin-bottom: 14px; letter-spacing: -0.3px;
+    }
+
+    /* Subscription Cards */
+    .sub-cards { display: flex; flex-direction: column; gap: 12px; }
+    .sub-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+      display: grid; grid-template-columns: auto 1fr auto;
+      gap: 0 16px; align-items: center; position: relative;
+      overflow: hidden; transition: all 0.2s;
+    }
+    .sub-card:hover { border-color: var(--border2); transform: translateX(2px); }
+    .sub-card.overdue  { border-left: 3px solid var(--red); }
+    .sub-card.upcoming { border-left: 3px solid var(--yellow); }
+    .sub-card.active   { border-left: 3px solid var(--green); }
+    .sub-card.expired  { border-left: 3px solid var(--muted); opacity: 0.65; }
+
+    .sub-logo {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; flex-shrink: 0;
+    }
+    .sub-info { min-width: 0; }
+    .sub-name {
+      font-family: var(--font-h); font-size: 1rem; font-weight: 700;
+      margin-bottom: 2px; display: flex; align-items: center; gap: 8px;
+    }
+    .autopay-badge {
+      font-size: 0.62rem; font-family: var(--font-m);
+      background: rgba(79,142,247,0.15); color: var(--accent);
+      padding: 2px 8px; border-radius: 4px; letter-spacing: 0.5px;
+    }
+    .sub-meta { font-size: 0.78rem; color: var(--muted); }
+
+    .sub-right { text-align: right; flex-shrink: 0; }
+    .sub-amount {
+      font-family: var(--font-h); font-size: 1.15rem; font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .status-pill {
+      display: inline-block; font-size: 0.68rem; font-family: var(--font-m);
+      font-weight: 500; padding: 3px 10px; border-radius: 99px;
+      letter-spacing: 0.5px;
+    }
+    .status-pill.active   { background: rgba(16,217,140,0.12); color: var(--green); }
+    .status-pill.upcoming { background: rgba(245,197,24,0.12); color: var(--yellow); }
+    .status-pill.overdue  { background: rgba(240,69,78,0.12);  color: var(--red); }
+    .status-pill.expired  { background: rgba(100,116,139,0.12); color: var(--muted); }
+
+    /* Progress bar */
+    .progress-wrap { margin-top: 10px; grid-column: 2; }
+    .progress-info { display: flex; justify-content: space-between; font-size: 0.73rem; color: var(--muted); margin-bottom: 5px; }
+    .progress-bg { background: var(--border); border-radius: 99px; height: 5px; overflow: hidden; }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.8s cubic-bezier(.22,1,.36,1);
+    }
+
+    /* Card Actions */
+    .card-actions {
+      display: flex; gap: 6px; margin-top: 10px; grid-column: 3;
+      align-self: end;
+    }
+    .btn-sm {
+      padding: 5px 12px; border-radius: 7px; font-size: 0.75rem;
+      cursor: pointer; border: 1px solid var(--border); transition: all 0.2s;
+      font-family: var(--font-b); background: var(--surface); color: var(--muted);
+    }
+    .btn-sm:hover { color: var(--accent); border-color: var(--accent); }
+    .btn-sm.danger:hover { color: var(--red); border-color: var(--red); }
+
+    /* ══════════════════════════════════════════
+       PIE CHART (Canvas-based, no library)
+    ══════════════════════════════════════════ */
+    .chart-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px;
+      position: sticky; top: 32px;
+    }
+    .chart-canvas-wrap { position: relative; margin: 16px 0; }
+    #pieChart { display: block; margin: 0 auto; }
+    .chart-legend { display: flex; flex-direction: column; gap: 8px; }
+    .legend-item {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.8rem;
+    }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .legend-name { flex: 1; color: var(--muted); }
+    .legend-val { font-family: var(--font-m); font-size: 0.78rem; font-weight: 500; }
+
+    /* Yearly spend */
+    .yearly-card {
+      background: linear-gradient(135deg, rgba(79,142,247,0.1), rgba(124,92,252,0.1));
+      border: 1px solid rgba(79,142,247,0.25);
+      border-radius: var(--radius); padding: 18px; margin-top: 16px; text-align: center;
+    }
+    .yearly-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+    .yearly-value {
+      font-family: var(--font-h); font-size: 1.7rem; font-weight: 900;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    /* ══════════════════════════════════════════
+       ADD / EDIT FORM
+    ══════════════════════════════════════════ */
+    .form-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 32px; max-width: 700px;
+    }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 7px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label {
+      font-size: 0.75rem; font-family: var(--font-m);
+      color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px;
+    }
+    input, select {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text);
+      font-family: var(--font-b); font-size: 0.9rem;
+      padding: 11px 14px; outline: none; transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,142,247,0.12);
+    }
+    select option { background: var(--card); }
+    .toggle-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 14px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 10px;
+    }
+    .toggle-label { font-size: 0.88rem; flex: 1; }
+    .toggle {
+      position: relative; width: 40px; height: 22px;
+      background: var(--border); border-radius: 99px;
+      cursor: pointer; transition: background 0.3s; flex-shrink: 0;
+    }
+    .toggle.on { background: var(--accent); }
+    .toggle::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; transition: transform 0.3s;
+    }
+    .toggle.on::after { transform: translateX(18px); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; font-family: var(--font-h); font-weight: 700;
+      font-size: 0.95rem; padding: 13px 32px; border: none;
+      border-radius: 10px; cursor: pointer; transition: all 0.25s;
+      margin-top: 8px;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,142,247,0.35); }
+    .btn-cancel {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--muted); font-family: var(--font-b); font-size: 0.9rem;
+      padding: 13px 24px; border-radius: 10px; cursor: pointer;
+      margin-top: 8px; margin-left: 10px; transition: all 0.2s;
+    }
+    .btn-cancel:hover { border-color: var(--border2); color: var(--text); }
+
+    /* ══════════════════════════════════════════
+       TRACKER PAGE — ALL SUBS TABLE
+    ══════════════════════════════════════════ */
+    .filter-bar {
+      display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;
+    }
+    .filter-select {
+      padding: 9px 14px; background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-family: var(--font-b);
+      font-size: 0.85rem; outline: none; cursor: pointer;
+    }
+    .filter-select:focus { border-color: var(--accent); }
+
+    .track-table { width: 100%; border-collapse: collapse; }
+    .track-table thead tr { background: var(--surface); }
+    .track-table th {
+      padding: 13px 16px; text-align: left;
+      font-family: var(--font-m); font-size: 0.7rem;
+      color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    .track-table td {
+      padding: 14px 16px; font-size: 0.85rem;
+      border-bottom: 1px solid rgba(30,45,69,0.4);
+      vertical-align: middle;
+    }
+    .track-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
+    .track-table .mono { font-family: var(--font-m); }
+
+    .table-wrap {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+
+    /* History modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px; width: 500px; max-width: 95vw;
+      max-height: 80vh; overflow-y: auto;
+      animation: fadeUp 0.3s ease;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .modal-title { font-family: var(--font-h); font-size: 1.2rem; font-weight: 700; }
+    .modal-close {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--muted); width: 32px; height: 32px;
+      border-radius: 8px; cursor: pointer; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .history-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-paid { color: var(--green); font-family: var(--font-m); font-size: 0.75rem; }
+
+    /* ══════════════════════════════════════════
+       TOAST NOTIFICATIONS
+    ══════════════════════════════════════════ */
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 18px; font-size: 0.85rem;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: var(--shadow); min-width: 280px;
+      animation: slideIn 0.3s ease;
+    }
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error   { border-left: 3px solid var(--red); }
+    @keyframes slideIn { from { transform: translateX(60px); opacity: 0; } }
+
+    /* ══════════════════════════════════════════
+       EMPTY STATE
+    ══════════════════════════════════════════ */
+    .empty { text-align: center; padding: 60px; color: var(--muted); }
+    .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+    .empty-text { font-size: 0.9rem; }
+
+    /* ══════════════════════════════════════════
+       RESPONSIVE
+    ══════════════════════════════════════════ */
+    @media (max-width: 900px) {
+      .stats-row { grid-template-columns: repeat(2,1fr); }
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .chart-card { position: static; }
+    }
+    @media (max-width: 640px) {
+      .shell { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; padding: 12px; }
+      .main { padding: 16px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">💳 Auto<span>Pay</span></div>
+    <nav>
+      <div class="nav-item active" onclick="showPage('dashboard',this)">
+        <span class="nav-icon">🏠</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('add',this)">
+        <span class="nav-icon">➕</span> Add Subscription
+      </div>
+      <div class="nav-item" onclick="showPage('tracker',this); loadTracker()">
+        <span class="nav-icon">📊</span> Tracker
+      </div>
+      <div class="nav-item" onclick="showPage('settings',this); loadSettings()">
+        <span class="nav-icon">⚙️</span> Alert Settings
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="theme-toggle" onclick="toggleTheme()">🌙 Toggle Dark/Light</button>
+    </div>
+  </aside>
+
+  <!-- ═══════════════ MAIN ═══════════════ -->
+  <main class="main">
+
+    <!-- ══ DASHBOARD ══ -->
+    <div id="dashboard" class="page active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-sub">Your subscription overview at a glance</div>
+        </div>
+        <button class="btn-primary" onclick="showPage('add', document.querySelectorAll('.nav-item')[1])">+ Add New</button>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card blue"><div class="stat-icon">📦</div><div class="stat-value" id="s-active">—</div><div class="stat-label">Active Subscriptions</div></div>
+        <div class="stat-card yellow"><div class="stat-icon">⏰</div><div class="stat-value" id="s-upcoming">—</div><div class="stat-label">Upcoming Payments</div></div>
+        <div class="stat-card red"><div class="stat-icon">🚨</div><div class="stat-value" id="s-overdue">—</div><div class="stat-label">Overdue</div></div>
+        <div class="stat-card green"><div class="stat-icon">💰</div><div class="stat-value" id="s-spend">—</div><div class="stat-label">Monthly Spend</div></div>
+      </div>
+
+      <!-- Reminders -->
+      <div class="reminders-wrap" id="remindersWrap"></div>
+
+      <!-- Cards + Pie -->
+      <div class="dashboard-grid">
+        <div>
+          <div class="section-title">Active Subscriptions</div>
+          <div class="sub-cards" id="subCards">
+            <div class="empty"><div class="empty-icon">📭</div><div class="empty-text">No subscriptions yet. Add one!</div></div>
+          </div>
+        </div>
+
+        <div>
+          <!-- Pie Chart -->
+          <div class="chart-card">
+            <div class="section-title">Spending Breakdown</div>
+            <div class="chart-canvas-wrap">
+              <canvas id="pieChart" width="240" height="240"></canvas>
+            </div>
+            <div class="chart-legend" id="chartLegend"></div>
+            <div class="yearly-card">
+              <div class="yearly-label">Estimated Yearly Spend</div>
+              <div class="yearly-value" id="yearlyVal">₹0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ADD / EDIT ══ -->
+    <div id="add" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title" id="formTitle">Add Subscription</div>
+          <div class="page-sub">Fill in details to track your AutoPay</div>
+        </div>
+      </div>
+      <div class="form-card">
+        <input type="hidden" id="editId"/>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Platform Name</label>
+            <select id="f-platform" onchange="updateEmoji()">
+              <option>Netflix</option><option>Hotstar</option><option>Amazon Prime</option>
+              <option>Spotify</option><option>YouTube Premium</option><option>Apple Music</option>
+              <option>iCloud</option><option>Google Drive</option><option>Dropbox</option>
+              <option>Gym App</option><option>Swiggy One</option><option>Zomato Pro</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Payment App</label>
+            <select id="f-app">
+              <option>PhonePe</option><option>Google Pay</option><option>Paytm</option>
+              <option>Credit Card</option><option>Debit Card</option><option>Net Banking</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Subscription Type</label>
+            <select id="f-type">
+              <option value="Monthly">Monthly</option>
+              <option value="Yearly">Yearly</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select id="f-cat">
+              <option>Entertainment</option><option>Music</option><option>Cloud Storage</option>
+              <option>Health</option><option>Food</option><option>Productivity</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Amount (₹)</label>
+            <input type="number" id="f-amount" placeholder="e.g. 649" min="1"/>
+          </div>
+          <div class="form-group">
+            <label>Duration (months)</label>
+            <input type="number" id="f-duration" placeholder="e.g. 12" min="1" value="12"/>
+          </div>
+          <div class="form-group">
+            <label>Start Date</label>
+            <input type="date" id="f-start"/>
+          </div>
+          <div class="form-group">
+            <label>Next Payment Date</label>
+            <input type="date" id="f-next"/>
+          </div>
+          <div class="form-group full">
+            <label>AutoPay Status</label>
+            <div class="toggle-row">
+              <span class="toggle-label">AutoPay Enabled — deducted automatically</span>
+              <div class="toggle" id="autopayToggle" onclick="this.classList.toggle('on')"></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:20px">
+          <button class="btn-primary" onclick="saveSubscription()">💾 Save Subscription</button>
+          <button class="btn-cancel" onclick="cancelForm()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TRACKER ══ -->
+    <div id="tracker" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Subscription Tracker</div>
+          <div class="page-sub">All subscriptions with full details</div>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <select class="filter-select" id="filterPlatform" onchange="loadTracker()">
+          <option value="">All Platforms</option>
+          <option>Netflix</option><option>Hotstar</option><option>Amazon Prime</option>
+          <option>Spotify</option><option>YouTube Premium</option><option>iCloud</option>
+          <option>Gym App</option><option>Other</option>
+        </select>
+        <select class="filter-select" id="filterApp" onchange="loadTracker()">
+          <option value="">All Payment Apps</option>
+          <option>PhonePe</option><option>Google Pay</option><option>Paytm</option>
+          <option>Credit Card</option><option>Debit Card</option>
+        </select>
+        <select class="filter-select" id="filterStatus" onchange="loadTracker()">
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="upcoming">Upcoming</option>
+          <option value="overdue">Overdue</option>
+          <option value="expired">Expired</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="track-table">
+          <thead>
+            <tr>
+              <th>Platform</th><th>App</th><th>Type</th>
+              <th>Amount</th><th>Next Payment</th>
+              <th>Progress</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trackerBody">
+            <tr><td colspan="8"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Loading...</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- ══ SETTINGS ══ -->
+    <div id="settings" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Alert Settings</div>
+          <div class="page-sub">Configure email & SMS reminders — sent 2 days before payment</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:900px">
+
+        <!-- Email Card -->
+        <div class="form-card">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+            <div style="width:44px;height:44px;background:linear-gradient(135deg,#4f8ef7,#7c5cfc);
+                  border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem">📧</div>
+            <div>
+              <div style="font-family:var(--font-h);font-weight:700;font-size:1rem">Email Alerts</div>
+              <div style="font-size:0.78rem;color:var(--muted)">Gmail SMTP (free)</div>
+            </div>
+            <div class="toggle" id="emailToggle" onclick="this.classList.toggle('on')" style="margin-left:auto"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Your Email (receives reminders)</label>
+            <input type="email" id="s-email" placeholder="you@gmail.com"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Gmail Sender (SMTP_USER)</label>
+            <input type="email" id="s-smtp-user" placeholder="sender@gmail.com"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Gmail App Password</label>
+            <input type="password" id="s-smtp-pass" placeholder="xxxx xxxx xxxx xxxx"/>
+          </div>
+          <div id="emailStatus" style="font-size:0.78rem;color:var(--muted);margin-bottom:12px"></div>
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="flex:1;padding:11px" onclick="saveSettings()">💾 Save</button>
+            <button class="btn-primary" style="flex:1;padding:11px;background:linear-gradient(135deg,#10d98c,#0ea5e9)"
+                    onclick="testAlert('email')">🧪 Test Email</button>
+          </div>
+        </div>
+
+        <!-- SMS Card -->
+        <div class="form-card">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+            <div style="width:44px;height:44px;background:linear-gradient(135deg,#f5c518,#f97316);
+                  border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem">📱</div>
+            <div>
+              <div style="font-family:var(--font-h);font-weight:700;font-size:1rem">SMS Alerts</div>
+              <div style="font-size:0.78rem;color:var(--muted)">Twilio (free trial)</div>
+            </div>
+            <div class="toggle" id="smsToggle" onclick="this.classList.toggle('on')" style="margin-left:auto"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Your Phone (receives SMS)</label>
+            <input type="tel" id="s-phone" placeholder="+91XXXXXXXXXX"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Twilio Account SID</label>
+            <input type="text" id="s-twilio-sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Twilio Auth Token</label>
+            <input type="password" id="s-twilio-token" placeholder="your_auth_token"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Twilio From Number</label>
+            <input type="tel" id="s-twilio-from" placeholder="+1XXXXXXXXXX"/>
+          </div>
+          <div id="smsStatus" style="font-size:0.78rem;color:var(--muted);margin-bottom:12px"></div>
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="flex:1;padding:11px" onclick="saveSettings()">💾 Save</button>
+            <button class="btn-primary" style="flex:1;padding:11px;background:linear-gradient(135deg,#f5c518,#f97316)"
+                    onclick="testAlert('sms')">🧪 Test SMS</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- How it works -->
+      <div style="max-width:900px;margin-top:20px">
+        <div class="form-card">
+          <div style="font-family:var(--font-h);font-size:1rem;font-weight:700;margin-bottom:16px">⏰ How Alerts Work</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
+              <div style="font-size:1.8rem;margin-bottom:8px">🕘</div>
+              <div style="font-weight:600;font-size:0.88rem;margin-bottom:4px">Daily at 9 AM</div>
+              <div style="font-size:0.78rem;color:var(--muted)">Scheduler checks all subscriptions automatically every morning</div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
+              <div style="font-size:1.8rem;margin-bottom:8px">📅</div>
+              <div style="font-weight:600;font-size:0.88rem;margin-bottom:4px">2 Days Before</div>
+              <div style="font-size:0.78rem;color:var(--muted)">Alert sent when next_payment date is today, tomorrow, or 2 days away</div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
+              <div style="font-size:1.8rem;margin-bottom:8px">🔕</div>
+              <div style="font-weight:600;font-size:0.88rem;margin-bottom:4px">No Duplicate Alerts</div>
+              <div style="font-size:0.78rem;color:var(--muted)">Each subscription is alerted only once per day via alerts_sent.json</div>
+            </div>
+          </div>
+
+          <!-- Alert Log -->
+          <div style="margin-top:20px">
+            <div style="font-weight:600;font-size:0.88rem;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+              <span>Recent Alert Log</span>
+              <button class="btn-sm" onclick="loadAlertLog()">↺ Refresh</button>
+            </div>
+            <div id="alertLog" style="background:var(--surface);border:1px solid var(--border);
+                  border-radius:10px;padding:14px;font-family:var(--font-m);font-size:0.75rem;
+                  max-height:160px;overflow-y:auto;color:var(--muted)">
+              Loading...
+            </div>
+          </div>
+        </div>
+
+        <!-- Setup Guide -->
+        <div class="form-card" style="margin-top:16px">
+          <div style="font-family:var(--font-h);font-size:1rem;font-weight:700;margin-bottom:14px">📖 Quick Setup Guide</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:0.83rem;line-height:1.8;color:var(--muted)">
+            <div>
+              <div style="font-weight:600;color:var(--text);margin-bottom:6px">📧 Gmail Setup</div>
+              1. Go to Google Account → Security<br>
+              2. Enable 2-Step Verification<br>
+              3. Search "App Passwords" → Generate<br>
+              4. Select "Mail" → Copy 16-char password<br>
+              5. Paste above as Gmail App Password<br>
+              6. Use your Gmail as SMTP_USER
+            </div>
+            <div>
+              <div style="font-weight:600;color:var(--text);margin-bottom:6px">📱 Twilio SMS Setup</div>
+              1. Sign up at <strong>twilio.com</strong> (free trial)<br>
+              2. Get Account SID + Auth Token from Console<br>
+              3. Get a free Twilio phone number<br>
+              4. Add your phone number as verified caller<br>
+              5. Paste credentials above<br>
+              6. Set SMS_ENABLED = True in app.py
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main><!-- /main -->
+</div><!-- /shell -->
+
+<!-- History Modal -->
+<div class="modal-overlay" id="historyModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="historyTitle">Payment History</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="historyBody"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+
+<script>
+/* ══════════════════════════════════════════
+   CONFIG & STATE
+══════════════════════════════════════════ */
+const API = 'http://127.0.0.1:5000/api';
+let allSubs = [];     // cached subscriptions
+let editMode = false; // are we editing?
+
+const EMOJIS = {
+  Netflix:'🎬', Hotstar:'📺', 'Amazon Prime':'📦', Spotify:'🎵',
+  'YouTube Premium':'▶️', 'Apple Music':'🎶', iCloud:'☁️',
+  'Google Drive':'🗂️', Dropbox:'📁', 'Gym App':'💪',
+  'Swiggy One':'🍔', 'Zomato Pro':'🍕', Other:'📱'
+};
+
+const PIE_COLORS = [
+  '#4f8ef7','#7c5cfc','#10d98c','#f5c518',
+  '#f0454e','#f97316','#06b6d4','#ec4899'
+];
+
+/* ══════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════ */
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+/* ══════════════════════════════════════════
+   DARK / LIGHT THEME
+══════════════════════════════════════════ */
+function toggleTheme() {
+  const html = document.documentElement;
+  html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
+}
+
+/* ══════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════ */
+function toast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = (type === 'success' ? '✅' : '❌') + ' ' + msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+/* ══════════════════════════════════════════
+   API HELPERS (with local fallback)
+══════════════════════════════════════════ */
+const LOCAL_KEY = 'autopay_subs';
+
+function localLoad() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_KEY)) || []; }
+  catch { return []; }
+}
+function localSave(arr) { localStorage.setItem(LOCAL_KEY, JSON.stringify(arr)); }
+
+function computeStatus(sub) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const nxt = new Date(sub.next_payment);
+  if (nxt < today) return 'overdue';
+  const diff = Math.round((nxt - today) / 86400000);
+  if (diff <= 2) return 'upcoming';
+  return 'active';
+}
+function monthsCompleted(sub) {
+  const start = new Date(sub.start_date);
+  const today = new Date();
+  const delta = (today.getFullYear() - start.getFullYear())*12 + (today.getMonth() - start.getMonth());
+  return Math.max(0, Math.min(delta, sub.duration || 12));
+}
+
+async function apiGet(path) {
+  try {
+    const res = await fetch(API + path);
+    if (!res.ok) throw new Error('bad response');
+    return await res.json();
+  } catch {
+    // Fallback: compute locally
+    if (path === '/dashboard') return localDashboard();
+    if (path.startsWith('/subscriptions')) return localSubs(path);
+    if (path.startsWith('/history/')) return localHistory(path.split('/history/')[1]);
+    return null;
+  }
+}
+async function apiPost(path, body) {
+  try {
+    const res = await fetch(API + path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error();
+    return await res.json();
+  } catch {
+    // Local fallback
+    const id = 'local-' + Date.now();
+    const arr = localLoad();
+    arr.push({ ...body, id, created_at: new Date().toISOString(), status: 'active' });
+    localSave(arr); return { success: true, id };
+  }
+}
+async function apiPut(path, body) {
+  try {
+    const res = await fetch(API + path, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    return await res.json();
+  } catch {
+    const arr = localLoad();
+    const id = path.split('/subscriptions/')[1];
+    const idx = arr.findIndex(s => s.id === id);
+    if (idx !== -1) { arr[idx] = { ...arr[idx], ...body }; localSave(arr); }
+    return { success: true };
+  }
+}
+async function apiDelete(path) {
+  try {
+    const res = await fetch(API + path, { method:'DELETE' });
+    return await res.json();
+  } catch {
+    const id = path.split('/subscriptions/')[1];
+    const arr = localLoad().filter(s => s.id !== id);
+    localSave(arr); return { success: true };
+  }
+}
+
+function localSubs(path) {
+  let arr = localLoad();
+  if (!arr.length) { arr = seedData(); localSave(arr); }
+  const params = new URLSearchParams(path.split('?')[1]);
+  if (params.get('platform')) arr = arr.filter(s => s.platform.toLowerCase().includes(params.get('platform').toLowerCase()));
+  if (params.get('app')) arr = arr.filter(s => s.payment_app.toLowerCase().includes(params.get('app').toLowerCase()));
+  arr.forEach(s => {
+    s.status = computeStatus(s);
+    s.months_completed = monthsCompleted(s);
+    s.months_remaining = Math.max(0, (s.duration||12) - s.months_completed);
+  });
+  const order = {overdue:0, upcoming:1, active:2, expired:3};
+  arr.sort((a,b) => (order[a.status]||4) - (order[b.status]||4));
+  return arr;
+}
+
+function localDashboard() {
+  const arr = localSubs('/subscriptions');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const reminders = [];
+  let monthly = 0, byP = {};
+  arr.forEach(s => {
+    const nxt = new Date(s.next_payment);
+    const diff = Math.round((nxt - today)/86400000);
+    if (diff >= 0 && diff <= 2) reminders.push({ platform: s.platform, amount: s.amount, days_left: diff, payment_app: s.payment_app });
+    const amt = s.sub_type === 'Yearly' ? s.amount/12 : parseFloat(s.amount);
+    monthly += amt;
+    byP[s.platform] = (byP[s.platform]||0) + amt;
+  });
+  return {
+    total_active: arr.filter(s=>s.status==='active'||s.status==='upcoming').length,
+    upcoming_count: arr.filter(s=>s.status==='upcoming').length,
+    total_overdue: arr.filter(s=>s.status==='overdue').length,
+    total_expired: arr.filter(s=>s.status==='expired').length,
+    monthly_spend: Math.round(monthly*100)/100,
+    yearly_spend: Math.round(monthly*12*100)/100,
+    reminders, by_platform: byP
+  };
+}
+
+function localHistory(id) {
+  const arr = localLoad();
+  const sub = arr.find(s=>s.id===id);
+  if (!sub) return [];
+  const start = new Date(sub.start_date);
+  const completed = monthsCompleted(sub);
+  return Array.from({length:completed},(_,i)=>{
+    const d = new Date(start); d.setMonth(d.getMonth()+i);
+    return { month: d.toLocaleDateString('en-IN',{month:'short',year:'numeric'}), amount: sub.amount, status:'paid', app: sub.payment_app };
+  }).reverse();
+}
+
+function seedData() {
+  const today = new Date();
+  const d = (offset) => { const x = new Date(today); x.setDate(x.getDate()+offset); return x.toISOString().split('T')[0]; };
+  return [
+    { id:'seed-1', platform:'Netflix', payment_app:'Credit Card', sub_type:'Monthly', amount:649, start_date:'2025-01-01', next_payment:d(2), autopay:true, duration:12, category:'Entertainment', status:'active', created_at:new Date().toISOString() },
+    { id:'seed-2', platform:'Spotify', payment_app:'PhonePe', sub_type:'Monthly', amount:119, start_date:'2025-02-01', next_payment:d(8), autopay:true, duration:12, category:'Music', status:'active', created_at:new Date().toISOString() },
+    { id:'seed-3', platform:'Amazon Prime', payment_app:'Google Pay', sub_type:'Yearly', amount:1499, start_date:'2025-01-15', next_payment:d(30), autopay:true, duration:12, category:'Entertainment', status:'active', created_at:new Date().toISOString() },
+    { id:'seed-4', platform:'Hotstar', payment_app:'Paytm', sub_type:'Monthly', amount:299, start_date:'2025-03-01', next_payment:d(-3), autopay:false, duration:6, category:'Entertainment', status:'overdue', created_at:new Date().toISOString() },
+    { id:'seed-5', platform:'iCloud', payment_app:'Credit Card', sub_type:'Monthly', amount:75, start_date:'2024-06-01', next_payment:d(15), autopay:true, duration:24, category:'Cloud Storage', status:'active', created_at:new Date().toISOString() },
+    { id:'seed-6', platform:'Gym App', payment_app:'PhonePe', sub_type:'Monthly', amount:999, start_date:'2024-10-01', next_payment:d(-10), autopay:true, duration:6, category:'Health', status:'expired', created_at:new Date().toISOString() }
+  ];
+}
+
+/* ══════════════════════════════════════════
+   DASHBOARD LOAD
+══════════════════════════════════════════ */
+async function loadDashboard() {
+  const [stats, subs] = await Promise.all([
+    apiGet('/dashboard'),
+    apiGet('/subscriptions')
+  ]);
+  allSubs = subs;
+
+  // Stat cards
+  document.getElementById('s-active').textContent   = stats.total_active;
+  document.getElementById('s-upcoming').textContent = stats.upcoming_count;
+  document.getElementById('s-overdue').textContent  = stats.total_overdue;
+  document.getElementById('s-spend').textContent    = '₹' + stats.monthly_spend.toLocaleString('en-IN');
+
+  // Overdue badge on nav
+  const badge = document.querySelector('.nav-badge');
+  if (badge) badge.remove();
+  if (stats.total_overdue > 0) {
+    const b = document.createElement('span');
+    b.className='nav-badge'; b.textContent = stats.total_overdue;
+    document.querySelectorAll('.nav-item')[0].appendChild(b);
+  }
+
+  // Reminders
+  const rw = document.getElementById('remindersWrap');
+  rw.innerHTML = '';
+  stats.reminders.forEach(r => {
+    const msg = r.days_left === 0 ? 'due <strong>TODAY</strong>'
+              : r.days_left === 1 ? 'due <strong>tomorrow</strong>'
+              : `due in <strong>${r.days_left} days</strong>`;
+    rw.innerHTML += `
+      <div class="reminder-banner">
+        <div class="reminder-bell">🔔</div>
+        <div class="reminder-text">
+          Your <strong>${r.platform}</strong> payment of <strong>₹${r.amount}</strong> is ${msg} via ${r.payment_app}
+        </div>
+        <div class="reminder-days">${r.days_left === 0 ? 'TODAY' : r.days_left + 'd'}</div>
+      </div>`;
+  });
+
+  // Subscription cards
+  renderSubCards(subs);
+
+  // Pie chart
+  drawPie(stats.by_platform);
+  document.getElementById('yearlyVal').textContent = '₹' + stats.yearly_spend.toLocaleString('en-IN');
+}
+
+function renderSubCards(subs) {
+  const wrap = document.getElementById('subCards');
+  if (!subs || !subs.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">No subscriptions yet. Add one!</div></div>';
+    return;
+  }
+  wrap.innerHTML = subs.map(s => {
+    const pct = s.months_completed && s.duration ? Math.round(s.months_completed/s.duration*100) : 0;
+    const emoji = EMOJIS[s.platform] || '📱';
+    const statusLabel = s.status === 'upcoming' ? '⏳ Upcoming' : s.status;
+    return `
+    <div class="sub-card ${s.status}" id="card-${s.id}">
+      <div class="sub-logo">${emoji}</div>
+      <div class="sub-info">
+        <div class="sub-name">
+          ${s.platform}
+          ${s.autopay ? '<span class="autopay-badge">AUTOPAY</span>' : ''}
+        </div>
+        <div class="sub-meta">${s.payment_app} • ${s.sub_type} • ${s.category||'—'}</div>
+        <div class="progress-wrap">
+          <div class="progress-info">
+            <span>${s.months_completed || 0}/${s.duration || 12} months</span>
+            <span>${s.months_remaining || 0} remaining</span>
+          </div>
+          <div class="progress-bg"><div class="progress-fill" style="width:${pct}%"></div></div>
+        </div>
+      </div>
+      <div class="sub-right">
+        <div class="sub-amount">₹${parseFloat(s.amount).toLocaleString('en-IN')}</div>
+        <div><span class="status-pill ${s.status}">${statusLabel}</span></div>
+        <div class="card-actions">
+          <button class="btn-sm" onclick="editSub('${s.id}')">✏️</button>
+          <button class="btn-sm" onclick="showHistory('${s.id}','${s.platform}')">📜</button>
+          <button class="btn-sm danger" onclick="deleteSub('${s.id}')">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════
+   PIE CHART (Pure Canvas — no library)
+══════════════════════════════════════════ */
+function drawPie(data) {
+  const canvas = document.getElementById('pieChart');
+  const ctx = canvas.getContext('2d');
+  const cx = canvas.width/2, cy = canvas.height/2, r = 95;
+  const total = Object.values(data).reduce((a,b)=>a+b,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (!total) return;
+
+  let startAngle = -Math.PI/2;
+  const entries = Object.entries(data);
+  const legend = document.getElementById('chartLegend');
+  legend.innerHTML = '';
+
+  entries.forEach(([name, val], i) => {
+    const slice = (val/total) * 2*Math.PI;
+    const color = PIE_COLORS[i % PIE_COLORS.length];
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,startAngle,startAngle+slice);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    // Gap
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,startAngle+0.02,startAngle+slice-0.02);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    // Donut hole
+    ctx.beginPath();
+    ctx.arc(cx,cy,50,-Math.PI/2, 3*Math.PI/2);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#161f30';
+    ctx.fill();
+    startAngle += slice;
+    // Legend
+    legend.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div><span class="legend-name">${name}</span><span class="legend-val">₹${Math.round(val).toLocaleString('en-IN')}/mo</span></div>`;
+  });
+
+  // Center text
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#e2eaf8';
+  ctx.font = 'bold 14px Cabinet Grotesk, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Monthly', cx, cy-6);
+  ctx.fillText('₹'+Math.round(total).toLocaleString('en-IN'), cx, cy+12);
+}
+
+/* ══════════════════════════════════════════
+   TRACKER PAGE
+══════════════════════════════════════════ */
+async function loadTracker() {
+  const platform = document.getElementById('filterPlatform')?.value || '';
+  const app = document.getElementById('filterApp')?.value || '';
+  const statusFilter = document.getElementById('filterStatus')?.value || '';
+  let subs = await apiGet(`/subscriptions${platform||app ? '?platform='+platform+'&app='+app : ''}`);
+  allSubs = subs;
+  if (statusFilter) subs = subs.filter(s => s.status === statusFilter);
+  const tbody = document.getElementById('trackerBody');
+  if (!subs || !subs.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No subscriptions found.</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = subs.map(s => {
+    const emoji = EMOJIS[s.platform] || '📱';
+    const pct = s.months_completed && s.duration ? Math.round(s.months_completed/s.duration*100) : 0;
+    const statusLabel = s.status === 'upcoming' ? '⏳ Upcoming' : s.status;
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:1.4rem">${emoji}</div>
+          <div>
+            <div style="font-weight:700;font-family:var(--font-h)">${s.platform}</div>
+            <div style="font-size:0.73rem;color:var(--muted)">${s.category||'—'} ${s.autopay?'<span class="autopay-badge">AUTOPAY</span>':''}</div>
+          </div>
+        </div>
+      </td>
+      <td class="mono" style="color:var(--muted);font-size:0.8rem">${s.payment_app}</td>
+      <td class="mono" style="font-size:0.8rem">${s.sub_type}</td>
+      <td class="mono" style="font-weight:700">₹${parseFloat(s.amount).toLocaleString('en-IN')}</td>
+      <td class="mono" style="font-size:0.8rem">${s.next_payment}</td>
+      <td style="min-width:140px">
+        <div style="font-size:0.72rem;color:var(--muted);margin-bottom:4px">${s.months_completed||0}/${s.duration||12} months (${pct}%)</div>
+        <div class="progress-bg"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </td>
+      <td><span class="status-pill ${s.status}">${statusLabel}</span></td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="btn-sm" onclick="editSub('${s.id}')">✏️</button>
+          <button class="btn-sm" onclick="showHistory('${s.id}','${s.platform}')">📜</button>
+          <button class="btn-sm danger" onclick="deleteSub('${s.id}')">🗑️</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════
+   ADD / EDIT FORM
+══════════════════════════════════════════ */
+function updateEmoji() { /* cosmetic */ }
+
+function cancelForm() {
+  editMode = false;
+  document.getElementById('editId').value = '';
+  document.getElementById('formTitle').textContent = 'Add Subscription';
+  showPage('dashboard', document.querySelectorAll('.nav-item')[0]);
+  loadDashboard();
+}
+
+function editSub(id) {
+  const sub = allSubs.find(s => s.id === id);
+  if (!sub) return;
+  editMode = true;
+  document.getElementById('editId').value = id;
+  document.getElementById('formTitle').textContent = 'Edit Subscription';
+  document.getElementById('f-platform').value = sub.platform || 'Netflix';
+  document.getElementById('f-app').value = sub.payment_app || 'PhonePe';
+  document.getElementById('f-type').value = sub.sub_type || 'Monthly';
+  document.getElementById('f-cat').value = sub.category || 'Entertainment';
+  document.getElementById('f-amount').value = sub.amount;
+  document.getElementById('f-duration').value = sub.duration || 12;
+  document.getElementById('f-start').value = sub.start_date;
+  document.getElementById('f-next').value = sub.next_payment;
+  const tog = document.getElementById('autopayToggle');
+  if (sub.autopay) tog.classList.add('on'); else tog.classList.remove('on');
+  showPage('add', document.querySelectorAll('.nav-item')[1]);
+}
+
+async function saveSubscription() {
+  const payload = {
+    platform:     document.getElementById('f-platform').value,
+    payment_app:  document.getElementById('f-app').value,
+    sub_type:     document.getElementById('f-type').value,
+    category:     document.getElementById('f-cat').value,
+    amount:       parseFloat(document.getElementById('f-amount').value),
+    duration:     parseInt(document.getElementById('f-duration').value),
+    start_date:   document.getElementById('f-start').value,
+    next_payment: document.getElementById('f-next').value,
+    autopay:      document.getElementById('autopayToggle').classList.contains('on')
+  };
+  if (!payload.amount || !payload.start_date || !payload.next_payment) {
+    toast('Please fill Amount, Start Date and Next Payment Date.', 'error'); return;
+  }
+  if (editMode) {
+    const id = document.getElementById('editId').value;
+    await apiPut(`/subscriptions/${id}`, payload);
+    toast(`${payload.platform} updated successfully!`);
+  } else {
+    await apiPost('/subscriptions', payload);
+    toast(`${payload.platform} added successfully!`);
+  }
+  editMode = false;
+  document.getElementById('f-amount').value = '';
+  document.getElementById('f-start').value = '';
+  document.getElementById('f-next').value = '';
+  document.getElementById('autopayToggle').classList.remove('on');
+  showPage('dashboard', document.querySelectorAll('.nav-item')[0]);
+  loadDashboard();
+}
+
+async function deleteSub(id) {
+  const sub = allSubs.find(s=>s.id===id);
+  if (!confirm(`Delete ${sub?.platform||'this'} subscription?`)) return;
+  await apiDelete(`/subscriptions/${id}`);
+  toast(`${sub?.platform||'Subscription'} deleted.`);
+  loadDashboard();
+  if (document.getElementById('tracker').classList.contains('active')) loadTracker();
+}
+
+/* ══════════════════════════════════════════
+   PAYMENT HISTORY MODAL
+══════════════════════════════════════════ */
+async function showHistory(id, name) {
+  const history = await apiGet(`/history/${id}`);
+  document.getElementById('historyTitle').textContent = `${name} — Payment History`;
+  const body = document.getElementById('historyBody');
+  if (!history || !history.length) {
+    body.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">No payments recorded yet.</div></div>';
+  } else {
+    body.innerHTML = history.map(h => `
+      <div class="history-item">
+        <div>
+          <div style="font-weight:600">${h.month}</div>
+          <div style="font-size:0.78rem;color:var(--muted)">${h.app}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:var(--font-h);font-weight:700">₹${parseFloat(h.amount).toLocaleString('en-IN')}</div>
+          <div class="history-paid">✅ ${h.status}</div>
+        </div>
+      </div>`).join('');
+  }
+  document.getElementById('historyModal').classList.add('open');
+}
+function closeModal() { document.getElementById('historyModal').classList.remove('open'); }
+
+/* ══════════════════════════════════════════
+   SET DEFAULTS FOR FORM
+══════════════════════════════════════════ */
+function setDefaultDates() {
+  const today = new Date().toISOString().split('T')[0];
+  const next = new Date(); next.setMonth(next.getMonth()+1);
+  document.getElementById('f-start').value = today;
+  document.getElementById('f-next').value = next.toISOString().split('T')[0];
+}
+
+/* ══════════════════════════════════════════
+   INIT
+══════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', () => {
+  setDefaultDates();
+  loadDashboard();
+});
+
+// Redraw pie on theme change (color vars shift)
+const observer = new MutationObserver(() => { if (allSubs.length) loadDashboard(); });
+observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+/* ══════════════════════════════════════════
+   SETTINGS PAGE
+══════════════════════════════════════════ */
+async function loadSettings() {
+  try {
+    const d = await apiGet('/settings');
+    if (!d) return;
+    document.getElementById('s-email').value = d.email || '';
+    document.getElementById('s-phone').value = d.phone || '';
+    if (d.email_enabled) document.getElementById('emailToggle').classList.add('on');
+    else document.getElementById('emailToggle').classList.remove('on');
+    if (d.sms_enabled) document.getElementById('smsToggle').classList.add('on');
+    else document.getElementById('smsToggle').classList.remove('on');
+    document.getElementById('emailStatus').innerHTML = d.smtp_configured
+      ? '<span style="color:var(--green)">✅ SMTP configured</span>'
+      : '<span style="color:var(--yellow)">⚠️ Using default credentials — update above</span>';
+    document.getElementById('smsStatus').innerHTML = d.twilio_configured
+      ? '<span style="color:var(--green)">✅ Twilio configured</span>'
+      : '<span style="color:var(--yellow)">⚠️ Add Twilio credentials to enable SMS</span>';
+  } catch(e) {}
+  loadAlertLog();
+}
+
+async function saveSettings() {
+  const payload = {
+    email:         document.getElementById('s-email').value,
+    phone:         document.getElementById('s-phone').value,
+    smtp_user:     document.getElementById('s-smtp-user').value,
+    smtp_pass:     document.getElementById('s-smtp-pass').value,
+    twilio_sid:    document.getElementById('s-twilio-sid').value,
+    twilio_token:  document.getElementById('s-twilio-token').value,
+    twilio_from:   document.getElementById('s-twilio-from').value,
+    email_enabled: document.getElementById('emailToggle').classList.contains('on'),
+    sms_enabled:   document.getElementById('smsToggle').classList.contains('on'),
+  };
+  try {
+    const res = await fetch(API + '/settings', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    const d = await res.json();
+    if (d.success) { toast('Settings saved!'); loadSettings(); }
+    else toast('Save failed', 'error');
+  } catch { toast('Saved locally (backend offline)', 'error'); }
+}
+
+async function testAlert(channel) {
+  const email = document.getElementById('s-email').value;
+  const phone  = document.getElementById('s-phone').value;
+  if (channel === 'email' && !email) { toast('Enter your email first', 'error'); return; }
+  if (channel === 'sms'   && !phone)  { toast('Enter your phone number first', 'error'); return; }
+  toast(`Sending test ${channel === 'email' ? 'email' : 'SMS'}...`);
+  try {
+    const res = await fetch(API + '/alerts/test', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ channel, email, phone })
+    });
+    const d = await res.json();
+    if (d.success) {
+      const r = channel === 'email' ? d.results?.email : d.results?.sms;
+      if (r?.sent) toast(`✅ ${channel === 'email' ? 'Email' : 'SMS'} sent to ${r.to}!`);
+      else toast(`❌ Failed: ${r?.message}`, 'error');
+    } else toast(d.message || 'Alert failed', 'error');
+  } catch(e) { toast('Backend offline — run python app.py', 'error'); }
+}
+
+async function loadAlertLog() {
+  const box = document.getElementById('alertLog');
+  if (!box) return;
+  try {
+    const res = await fetch(API + '/alerts/log');
+    const data = await res.json();
+    if (!data.length) { box.textContent = 'No alerts sent yet.'; return; }
+    box.innerHTML = data.map(e => {
+      const parts = e.key.split('_');
+      return `<div style="padding:4px 0;border-bottom:1px solid var(--border)">
+        ✅ ${parts[0] || e.key} &nbsp;•&nbsp;
+        <span style="color:var(--accent)">${e.sent_at.slice(0,19).replace('T',' ')}</span>
+      </div>`;
+    }).join('');
+  } catch { box.textContent = 'Backend offline.'; }
+}
+
+</script>
+</body>
+</html>
